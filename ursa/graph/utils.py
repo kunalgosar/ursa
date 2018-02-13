@@ -71,8 +71,7 @@ def write_vertex(vertex, graph_id, key):
     local_edges_buffer = pa.serialize(vertex.local_edges.buf,
                                       serialization_context).to_buffer()
 
-    oids.append(local_edges_buffer)
-    num_local_edge_lists = len(vertex.local_edges.edges) + 1
+    num_local_edge_lists = len(vertex.local_edges.edges)
 
     foreign_edges = list(vertex.foreign_edges.keys())
     oids.extend([vertex.foreign_edges[k] for k in foreign_edges])
@@ -80,10 +79,16 @@ def write_vertex(vertex, graph_id, key):
             if type(oid) is ray.local_scheduler.ObjectID]
 
     buffers = ray.worker.global_worker.plasma_client.get_buffers(oids)
-    data = {"vertex_data": buffers[0],
-            "local_edges": buffers[1:1 + num_local_edge_lists],
+
+    vertex_data = buffers[0]
+    local_edges = buffers[1:1 + num_local_edge_lists]
+    local_edges.append(local_edges_buffer)
+    foreign_edge_values = buffers[1 + num_local_edge_lists:]
+
+    data = {"vertex_data": vertex_data,
+            "local_edges": local_edges,
             "foreign_edges": foreign_edges,
-            "foreign_edge_values": buffers[1 + num_local_edge_lists:],
+            "foreign_edge_values": foreign_edge_values,
             "transaction_id": vertex._transaction_id}
 
     serialized = pa.serialize(data, serialization_context).to_buffer()
